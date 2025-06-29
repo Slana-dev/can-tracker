@@ -8,45 +8,33 @@ cap = cv2.VideoCapture(2)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, sirina)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, visina)
 model=YOLO(r"best.pt")
-cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_FPS, 60)
 
-#vrne rezultate 
-def retResults(frame):
-     results = model.track(
-        source=frame,
-        tracker="bytetrack.yaml",
-        classes=[0],
-        conf=0.2,
-        iou=0.3,
-        persist=True,
-       #device='cuda',
-        verbose= False
-    )
-    return results
+
 
 #vrne vse razdalje
-def kalkulatorRazdalj(boxes, len, centerX, centerY):
+def kalkulatorRazdalj(boxes, len):
     i = 0
     razdalje = []
     for i in range(len):
         x = boxes[i][0]
         y = boxes[i][1]
-        dolzina = abs(x- centerX) + abs(y - centerY)
+        dolzina = abs(x- int(sirina) // 2) + abs(y - int(visina) // 2)
         razdalje.append(dolzina)
         i+=1
     return razdalje
 
 #izracuna trenutno razdaljo
-def trenutnaRazdalja(minInde, centerX, centerY, boxes):
+def trenutnaRazdalja(minInde, boxes):
     x = boxes[minInde][0]
     y = boxes[minInde][1]
-    dolzina = abs(x- centerX) + abs(y - centerY)
+    dolzina = abs(x- int(sirina) // 2) + abs(y - int(visina) // 2)
     return dolzina
 
 #najde indeks minimalne razdalje
 def minDolzina(dolzine, n):
-    min = 10000
-    i= 0
+    min = 100000
+    i = 0
     minInde = -1
     for i in range(n):
         if dolzine[i] < min:
@@ -56,42 +44,55 @@ def minDolzina(dolzine, n):
     return minInde
 
 #izvede ukaze
-def ukazi(minInde, boxes, centerY, centerX, n):
+def izvedi(minInde, n):
     counter = 0
-    delay = 5
+    delay = 20
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        results = retResults(frame)
+        results = model.track(
+            source=frame,
+            tracker="bytetrack.yaml",
+            classes=[0],
+            conf=0.1,
+            iou=0.3,
+            persist=True,
+            device='cuda',
+            verbose= False
+        )
+
         stBox = len(results[0].boxes)
 
         # Display
         anotacija= results[0].plot()
+        cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
         cv2.imshow("preview", anotacija)
-        cv2.circle(frame, (sirina/2, visina/2), 5, (0, 0, 255), -1)
+       
 
         # In case a box is lost
-        if stBox < n:
+        if stBox != n:
+            print("RESET\n") 
             return
 
         boxes = results[0].boxes.xywh.cpu().numpy()
 
         # In case indexes shift
-        if minInde >= len(boxes):  
+        if minInde >= len(boxes):
+            print("RESET\n")  
             return
 
-        razdalja = trenutnaRazdalja(minInde, centerX, centerY, boxes)
-        print("Razdalja:",razdalja)
-
-        # Ce razdalja manjsa vklopi microstepping
+        # Move the robot
         if counter % delay == 0:
-            if razdalja < 40:
+            razdalja = trenutnaRazdalja(minInde, boxes)
+            print("Razdalja:",razdalja)
+            # Ce razdalja manjsa vklopi microstepping
+            if razdalja < 200:
                 print("microstepping")
             print("sending info")
 
-    counter+=1
+        counter+=1
 
         # Quit
         if cv2.waitKey(1) == ord('q'):
@@ -99,31 +100,43 @@ def ukazi(minInde, boxes, centerY, centerX, n):
 
 
 #MAIN
-delay = 10
+delay = 20
 frameCounter = 0
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    results = retResults(frame)
+    results = model.track(
+        source=frame,
+        tracker="bytetrack.yaml",
+        classes=[0],
+        conf=0.1,
+        iou=0.3,
+        persist=True,
+       #device='cuda',
+        verbose= False
+    )
     
     # Display
     anotacija= results[0].plot()
+    cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
     cv2.imshow("preview", anotacija)
-    cv2.circle(frame, (sirina/2, visina/2), 5, (0, 0, 255), -1)
+   
 
     if frameCounter % delay == 0:
         n = len(results[0].boxes)
         if(n != 0):
-            print("detected:", n)
             boxes = results[0].boxes.xywh.cpu().numpy()
             # Vse razdalje in minIndeks
-            dolzine = kalkulatorRazdalj(boxes, n, sirina/2, visina/2)
+            dolzine = kalkulatorRazdalj(boxes, n)
             minDolzinaInde = minDolzina(dolzine, n)
             # Izvedi ukaze za minIndeks
             print("Najblizji:",minDolzinaInde, dolzine[minDolzinaInde])
-            ukazi(minDolzinaInde,boxes, sirina/2, visina/2, n)
+            izvedi(minDolzinaInde, n)
+        else:
+            print("FREE ROAM")
+
 
     frameCounter+=1
       
