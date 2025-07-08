@@ -2,8 +2,8 @@ import math
 from ultralytics import YOLO
 import cv2
 
-sirina = 1280
-visina = 720
+sirina = 480
+visina = 360
 verticalFov = 57
 horizontalFov = 88
 horizontalFov_rad = math.radians(horizontalFov)
@@ -14,11 +14,11 @@ focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
 
 
-cap = cv2.VideoCapture(1)  
+cap = cv2.VideoCapture(2)  
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, sirina)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, visina)
 model=YOLO(r"best.pt") 
-cap.set(cv2.CAP_PROP_FPS, 60)
+cap.set(cv2.CAP_PROP_FPS, 30)
 
 
 # vrne vse razdalje
@@ -65,7 +65,12 @@ def kotKalkulator(boxes, minInde, smer):
     dolzina = abs(y- int(visina) // 2)
     kotStopinje = math.degrees(math.atan(dolzina / focalY))
     return kotStopinje
-    
+
+# Odmik po y glede na oddaljenost
+def odmikOddaljenost(boxes, minInde):
+    razmerje = visina / boxes[minInde][3]
+    print(razmerje)
+
 # Smer premika
 def smerPremika(boxes, minInde, smer):
     if smer == 'x':
@@ -138,6 +143,7 @@ def izvedi(minInde, n):
             smerY = smerPremika(boxes, minInde, 'y')
             kotX = kotKalkulator(boxes, minInde, 'x')
             kotY = kotKalkulator(boxes, minInde, 'y')
+            odmikOddaljenost(boxes, minInde)
             print("smer" , smerX, smerY,"kot: ", kotX, kotY)
 
         counter+=1
@@ -170,7 +176,7 @@ def mainLoop():
         anotacija= results[0].plot()
         cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
         cv2.imshow("preview", anotacija)
-    
+
 
         if frameCounter % delay == 0:
             n = len(results[0].boxes)
