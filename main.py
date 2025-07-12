@@ -14,6 +14,7 @@ horizontalFov_rad = math.radians(horizontalFov)
 verticalFov_rad = math.radians(verticalFov)
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
+manual = False
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -43,16 +44,8 @@ def kalkulatorRazdalj(boxes, len):
     return razdalje
 
 
-# izracuna trenutno razdaljo
-def trenutnaRazdalja(minInde, boxes): 
-    x = boxes[minInde][0]
-    y = boxes[minInde][1]
-    dolzina = abs(x- int(sirina) // 2) + abs(y - int(visina) // 2)
-    return dolzina
-
-
 # najde indeks minimalne razdalje
-def minDolzina(dolzine, n):
+def minRazdaljaIndeks(dolzine, n):
     min = 1000000
     i = 0
     minInde = -1
@@ -78,7 +71,7 @@ def kotKalkulator(boxes, minInde, smer, odmikY):
     return kotStopinje
 
 
-# Odmik po y glede na oddaljenost
+# Odmik po y glede na oddaljenost za natancnost
 def odmikOddaljenost(boxes, minInde):
     heightBox = boxes[minInde][3]
     razmerje = heightBox / visina
@@ -91,7 +84,15 @@ def odmikOddaljenost(boxes, minInde):
         return heightBox/ 2
     else: 
         return heightBox
-   
+
+
+# vrne razdaljo vzdolz podate osi
+def razdaljaVzdolzOsi(os, minInde, boxes):
+    if os == 'x':
+        return abs(sirina//2 - boxes[minInde][0])
+    elif os == 'y':
+        return abs(visina//2 - boxes[minInde][1])
+
 
 # Smer premika
 def smerPremika(boxes, minInde, smer, odmikY):
@@ -110,14 +111,15 @@ def smerPremika(boxes, minInde, smer, odmikY):
  
 
 # Poslje komando
-def sendCommand(smerX, smerY, kotX, kotY, micro):
+def sendCommand(smerX, smerY, kotX, kotY, microX, microY):
     buffer= struct.pack(
-        '<BBffB',
+        '<BBffBB',
         smerX, 
         smerY, 
         kotX, 
         kotY, 
-        micro
+        microX,
+        microY
     )
     arduino.write(buffer)
 
@@ -127,8 +129,10 @@ def izvedi(minInde, n):
     counter = 0
     delay = 30
     while True:
-        microsteping = 0
+        microX = 0
+        microY = 0
         ret, frame = cap.read()
+
         if not ret:
             break
 
@@ -136,7 +140,7 @@ def izvedi(minInde, n):
             source=frame,
             tracker="bytetrack.yaml",
             classes=[0],
-            conf=0.1,
+            conf=0.15,
             iou=0.3,
             persist=True,
             device='cuda',
@@ -165,21 +169,24 @@ def izvedi(minInde, n):
         
         # Move the robot
         if counter % delay == 0:
-            razdalja = trenutnaRazdalja(minInde, boxes)
-            print("Razdalja:", razdalja)
-           
-            if razdalja < 250:
-                microsteping = 1
-                print("microstepping")
+            
+            razdaljaX = razdaljaVzdolzOsi('x', minInde, boxes)
+            rezdaljaY = razdaljaVzdolzOsi('y', minInde, boxes)
+
+            if razdaljaX < 250:
+                microX = 1
+            if razdaljaY < 250:
+                microY = 1
 
             odmikY =  odmikOddaljenost(boxes, minInde)
+
             smerX = smerPremika(boxes, minInde, 'x', 0)
             smerY = smerPremika(boxes, minInde, 'y', odmikY)
             
             kotX = kotKalkulator(boxes, minInde, 'x', 0)
             kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
 
-            sendCommand(smerX, smerY, kotX, kotY, microsteping)
+            sendCommand(smerX, smerY, kotX, kotY, microX, microY)
             print("smer" , smerX, smerY,"kot: ", kotX, kotY)
 
         counter+=1
@@ -201,7 +208,7 @@ def mainLoop():
             source=frame,
             tracker="bytetrack.yaml",
             classes=[0],
-            conf=0.1,
+            conf=0.15,
             iou=0.3,
             persist=True,
             device='cuda',
@@ -220,7 +227,7 @@ def mainLoop():
                 boxes = results[0].boxes.xywh.cpu().numpy()
                 # Vse razdalje in minIndeks
                 dolzine = kalkulatorRazdalj(boxes, n)
-                minDolzinaInde = minDolzina(dolzine, n)
+                minDolzinaInde = minRazdaljaIndeks(dolzine, n)
                 # Izvedi ukaze za minIndeks
                 print("Najblizji:",minDolzinaInde, dolzine[minDolzinaInde])
                 izvedi(minDolzinaInde, n)
@@ -237,4 +244,7 @@ def mainLoop():
     cv2.destroyAllWindows()
     return
 
-mainLoop()
+    
+if(not manual):
+    mainLoop()
+else:
