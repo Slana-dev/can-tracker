@@ -1,24 +1,33 @@
 import math
+import struct
 from ultralytics import YOLO
 import cv2
+import serial
+import time
 
-sirina = 480
-visina = 360
+# VARIABLES
+sirina = 1280
+visina = 720
 verticalFov = 57
 horizontalFov = 88
 horizontalFov_rad = math.radians(horizontalFov)
 verticalFov_rad = math.radians(verticalFov)
-
-
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
 
-
-cap = cv2.VideoCapture(2)  
+# DISPLAY
+cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, sirina)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, visina)
 model=YOLO(r"best.pt") 
-cap.set(cv2.CAP_PROP_FPS, 30)
+cap.set(cv2.CAP_PROP_FPS, 60)
+
+# Show display
+performance = True
+
+# ARDUINO
+arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
+time.sleep(2)
 
 
 # vrne vse razdalje
@@ -41,6 +50,7 @@ def trenutnaRazdalja(minInde, boxes):
     dolzina = abs(x- int(sirina) // 2) + abs(y - int(visina) // 2)
     return dolzina
 
+
 # najde indeks minimalne razdalje
 def minDolzina(dolzine, n):
     min = 1000000
@@ -53,8 +63,9 @@ def minDolzina(dolzine, n):
         i+=1
     return minInde
 
+
 # Izracuna kot
-def kotKalkulator(boxes, minInde, smer):
+def kotKalkulator(boxes, minInde, smer, odmikY):
     if smer == 'x':
         x = boxes[minInde][0]
         dolzina = abs(x- int(sirina) // 2)
@@ -62,38 +73,61 @@ def kotKalkulator(boxes, minInde, smer):
         return kotStopinje
     
     y = boxes[minInde][1]
-    dolzina = abs(y- int(visina) // 2)
+    dolzina = abs(y - odmikY- int(visina) // 2)
     kotStopinje = math.degrees(math.atan(dolzina / focalY))
     return kotStopinje
 
+
 # Odmik po y glede na oddaljenost
 def odmikOddaljenost(boxes, minInde):
-    razmerje = visina / boxes[minInde][3]
-    print(razmerje)
+    heightBox = boxes[minInde][3]
+    razmerje = heightBox / visina
+    
+    if razmerje > 0.3:
+        return 0
+    elif razmerje <= 0.3 and razmerje > 0.2:
+        return heightBox / 4
+    elif razmerje <= 0.2 and razmerje > 0.1:
+        return heightBox/ 2
+    else: 
+        return heightBox
+   
 
 # Smer premika
-def smerPremika(boxes, minInde, smer):
+def smerPremika(boxes, minInde, smer, odmikY):
     if smer == 'x':
         x = boxes[minInde][0]
         dolzina = (x- int(sirina) // 2)
         if(dolzina > 0):
-            return 'd'
-        return 'a'
-        
+            return 1
+        return 0
     
     y = boxes[minInde][1]
-    dolzina = (y- int(visina) // 2)
+    dolzina = (y - odmikY- int(visina) // 2)
     if(dolzina > 0):
-        return 's'
-    return 'w'
+        return 0
+    return 1
+ 
+
+# Poslje komando
+def sendCommand(smerX, smerY, kotX, kotY, micro):
+    buffer= struct.pack(
+        '<BBffB',
+        smerX, 
+        smerY, 
+        kotX, 
+        kotY, 
+        micro
+    )
+    arduino.write(buffer)
 
 
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
-    delay = 20
+    delay = 30
     while True:
-        microsteping = '0'
+        microsteping = 0
         ret, frame = cap.read()
         if not ret:
             break
@@ -105,7 +139,7 @@ def izvedi(minInde, n):
             conf=0.1,
             iou=0.3,
             persist=True,
-            #device='cuda',
+            device='cuda',
             verbose= False
         )
 
@@ -113,9 +147,9 @@ def izvedi(minInde, n):
 
         # Display
         anotacija= results[0].plot()
-        cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
-        cv2.imshow("preview", anotacija)
-       
+        if(performance):
+            cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
+            cv2.imshow("preview", anotacija)
 
         # In case a box is lost
         if stBox != n:
@@ -129,21 +163,23 @@ def izvedi(minInde, n):
             print("RESET\n")  
             return
         
-        
         # Move the robot
         if counter % delay == 0:
             razdalja = trenutnaRazdalja(minInde, boxes)
             print("Razdalja:", razdalja)
            
             if razdalja < 250:
-                microsteping = '1'
+                microsteping = 1
                 print("microstepping")
 
-            smerX = smerPremika(boxes, minInde, 'x')
-            smerY = smerPremika(boxes, minInde, 'y')
-            kotX = kotKalkulator(boxes, minInde, 'x')
-            kotY = kotKalkulator(boxes, minInde, 'y')
-            odmikOddaljenost(boxes, minInde)
+            odmikY =  odmikOddaljenost(boxes, minInde)
+            smerX = smerPremika(boxes, minInde, 'x', 0)
+            smerY = smerPremika(boxes, minInde, 'y', odmikY)
+            
+            kotX = kotKalkulator(boxes, minInde, 'x', 0)
+            kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
+
+            sendCommand(smerX, smerY, kotX, kotY, microsteping)
             print("smer" , smerX, smerY,"kot: ", kotX, kotY)
 
         counter+=1
@@ -154,7 +190,7 @@ def izvedi(minInde, n):
 
 
 def mainLoop():
-    delay = 30
+    delay = 20
     frameCounter = 0
     while True:
         ret, frame = cap.read()
@@ -168,15 +204,15 @@ def mainLoop():
             conf=0.1,
             iou=0.3,
             persist=True,
-            #device='cuda',
+            device='cuda',
             verbose= False
         )
         
         # Display
         anotacija= results[0].plot()
-        cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
-        cv2.imshow("preview", anotacija)
-
+        if(performance):
+            cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
+            cv2.imshow("preview", anotacija)
 
         if frameCounter % delay == 0:
             n = len(results[0].boxes)
@@ -191,19 +227,14 @@ def mainLoop():
             else:
                 print("FREE ROAM")
 
-
         frameCounter+=1
         
         # Quit
         if cv2.waitKey(1) == ord('q'):
             break
-        
-
+    
     cap.release()
     cv2.destroyAllWindows()
     return
-
-
-
 
 mainLoop()
