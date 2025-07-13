@@ -23,7 +23,8 @@ const int bytes = 12;
 byte podatki[bytes];
 
 const int microMultiplier = 16;
-int faktor = 1;
+int faktorX = 1;
+int faktorY = 1;
 int stepsX = 0;
 int stepsY = 0;
 float kotX = 0;
@@ -34,10 +35,10 @@ void setup() {
   digitalWrite(ENABLE_PIN, LOW);   
   
   stepperX.setMaxSpeed(1000);         
-  stepperX.setAcceleration(100000);      
+  stepperX.setAcceleration(500);      
 
   stepperY.setMaxSpeed(1000);
-  stepperY.setAcceleration(100000);
+  stepperY.setAcceleration(500);
   Serial.begin(9600);
 
   pinMode(X_MS1, OUTPUT);

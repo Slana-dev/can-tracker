@@ -16,11 +16,7 @@ verticalFov_rad = math.radians(verticalFov)
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
 
-# Manual settings
-manual = False
-keys_pressed = set()
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
+
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -37,13 +33,16 @@ arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
 time.sleep(2)
 
 
+# Manual settings
 def on_press(key):
     keys_pressed.add(key.char)
-
-
 def on_release(key):
     keys_pressed.discard(key.char)
 
+manual = True
+keys_pressed = set()
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()
 
 # vrne vse razdalje
 def kalkulatorRazdalj(boxes, len):
@@ -141,7 +140,7 @@ def sendCommand(smerX, smerY, kotX, kotY, microX, microY):
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
-    delay = 30
+    delay = 5
     while True:
         microX = 0
         microY = 0
@@ -185,11 +184,11 @@ def izvedi(minInde, n):
         if counter % delay == 0:
             
             razdaljaX = razdaljaVzdolzOsi('x', minInde, boxes)
-            rezdaljaY = razdaljaVzdolzOsi('y', minInde, boxes)
-
-            if razdaljaX < 250:
+            razdaljaY = razdaljaVzdolzOsi('y', minInde, boxes)
+            print(razdaljaX, razdaljaY)
+            if razdaljaX < 300:
                 microX = 1
-            if razdaljaY < 250:
+            if razdaljaY < 300:
                 microY = 1
 
             odmikY =  odmikOddaljenost(boxes, minInde)
@@ -209,6 +208,9 @@ def izvedi(minInde, n):
         if cv2.waitKey(1) == ord('q'):
             break
 
+    cap.release()
+    cv2.destroyAllWindows()
+    return       
 
 def mainLoop():
     delay = 20
@@ -251,14 +253,15 @@ def mainLoop():
         frameCounter+=1
         
         # Quit
-        if 'q' in keys_pressed:
+        if cv2.waitKey(1) == ord('q'):
             break
-    
+
     cap.release()
     cv2.destroyAllWindows()
+    
     return
 
-def manual():
+def Manual():
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -269,7 +272,7 @@ def manual():
             cv2.imshow("preview", frame)
 
         if 'w' in keys_pressed:
-            sendCommand(0,1, 0, 4, 1,1)
+            sendCommand(1,1, 0, 4, 1,1)
         if 's' in keys_pressed:
             sendCommand(0,0, 0, 4, 1,1)
         if 'd' in keys_pressed:
@@ -277,18 +280,15 @@ def manual():
         if 'a' in keys_pressed:
             sendCommand(0,0, 4, 0, 1,1)
      # Quit
-        if 'q' in keys_pressed:
+        if cv2.waitKey(1) == ord('q'):
             break
 
+    cap.release()
+    cv2.destroyAllWindows()
+    return       
 
-if(not manual):
-    print("AUTOMATIC")
-    print("-----------------")
-    print("controls:")
-    print("Q / quit")
-    print("-----------------")
-    mainLoop()
-else:
+
+if manual:
     print("MANUAL")
     print("-----------------")
     print("controls:")
@@ -299,4 +299,11 @@ else:
     print("SPACE / shoot")
     print("Q / quit")
     print("-----------------")
-    manual()
+    Manual()
+else:
+    print("AUTOMATIC")
+    print("-----------------")
+    print("controls:")
+    print("Q / quit")
+    print("-----------------")
+    mainLoop()
