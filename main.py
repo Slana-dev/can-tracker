@@ -4,6 +4,7 @@ from ultralytics import YOLO
 import cv2
 import serial
 import time
+from pynput import keyboard
 
 # VARIABLES
 sirina = 1280
@@ -14,7 +15,12 @@ horizontalFov_rad = math.radians(horizontalFov)
 verticalFov_rad = math.radians(verticalFov)
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
+
+# Manual settings
 manual = False
+keys_pressed = set()
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -29,6 +35,14 @@ performance = True
 # ARDUINO
 arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
 time.sleep(2)
+
+
+def on_press(key):
+    keys_pressed.add(key.char)
+
+
+def on_release(key):
+    keys_pressed.discard(key.char)
 
 
 # vrne vse razdalje
@@ -237,14 +251,52 @@ def mainLoop():
         frameCounter+=1
         
         # Quit
-        if cv2.waitKey(1) == ord('q'):
+        if 'q' in keys_pressed:
             break
     
     cap.release()
     cv2.destroyAllWindows()
     return
 
-    
+def manual():
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if(performance):
+            cv2.circle(frame, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
+            cv2.imshow("preview", frame)
+
+        if 'w' in keys_pressed:
+            sendCommand(0,1, 0, 4, 1,1)
+        if 's' in keys_pressed:
+            sendCommand(0,0, 0, 4, 1,1)
+        if 'd' in keys_pressed:
+            sendCommand(1,1, 4, 0, 1,1)
+        if 'a' in keys_pressed:
+            sendCommand(0,0, 4, 0, 1,1)
+     # Quit
+        if 'q' in keys_pressed:
+            break
+
+
 if(not manual):
+    print("AUTOMATIC")
+    print("-----------------")
+    print("controls:")
+    print("Q / quit")
+    print("-----------------")
     mainLoop()
 else:
+    print("MANUAL")
+    print("-----------------")
+    print("controls:")
+    print("W / up")
+    print("S / down")
+    print("D / right")
+    print("A / left")
+    print("SPACE / shoot")
+    print("Q / quit")
+    print("-----------------")
+    manual()

@@ -30,7 +30,7 @@ float kotX = 0;
 float kotY = 0;
 
 void setup() {
-  pinMode(ENABLE_PIN, OUTPUT);         // Set pin 38 as output
+  pinMode(ENABLE_PIN, OUTPUT);        
   digitalWrite(ENABLE_PIN, LOW);   
   
   stepperX.setMaxSpeed(1000);         
