@@ -19,25 +19,22 @@
 
 AccelStepper stepperX(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN );
 AccelStepper stepperY(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN );
-const int bytes = 12;
+const int bytes = 6;
 byte podatki[bytes];
 
 const int microMultiplier = 16;
-int faktorX = 1;
-int faktorY = 1;
 int stepsX = 0;
 int stepsY = 0;
-float kotX = 0;
-float kotY = 0;
+
 
 void setup() {
   pinMode(ENABLE_PIN, OUTPUT);        
   digitalWrite(ENABLE_PIN, LOW);   
   
-  stepperX.setMaxSpeed(1000);         
+  stepperX.setMaxSpeed(10000);         
   stepperX.setAcceleration(500);      
 
-  stepperY.setMaxSpeed(1000);
+  stepperY.setMaxSpeed(10000);
   stepperY.setAcceleration(500);
   Serial.begin(9600);
 
@@ -64,37 +61,29 @@ void setMicrosteppingY(bool enable) {
 void loop() {
   if (Serial.available() == bytes) {
     Serial.readBytes(podatki, bytes);
-    bool smerX = (podatki[0] == 1);
-    bool smerY = (podatki[1] == 1);
-    bool microX = podatki[10] == 1;
-    bool microY = podatki[11] == 1;
-
-    int directionX = smerX ? 1 : -1;
-    int directionY = smerY ? 1 : -1;
-
-    memcpy(&kotX, &podatki[2], 4);
-    memcpy(&kotY,&podatki[6], 4 );
-
-    faktorX = microX ? 1 : microMultiplier;
-    faktorY = microY ? 1 : microMultiplier;
+    int8_t smerX = (int8_t)podatki[0];  // interpret as signed
+    int8_t smerY = (int8_t)podatki[1];
+    stepsX = podatki[2];
+    stepsY = podatki[3];
+    bool microX = podatki[4] == 1;
+    bool microY = podatki[5] == 1;
 
     if(microX){
       setMicrosteppingX(true);
+      stepsX *= 16;
     }else{
       setMicrosteppingX(false);
     }
     if(microY){
       setMicrosteppingY(true);
+      stepsY *= 16;
     }else{
       setMicrosteppingY(false);
     }
-
-    stepsX = int(kotX/(1.8 / faktorX));
-    stepsY = int(kotY/(1.8 / faktorY));
-    stepperX.moveTo(stepperX.currentPosition() + stepsX * directionX);
-    stepperY.moveTo(stepperY.currentPosition()+ stepsY * directionY);
+      stepperX.move(stepsX * smerX);
+      stepperY.move(stepsY * smerY);
+    
   }
-
   stepperX.run();
   stepperY.run();
 

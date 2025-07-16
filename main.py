@@ -4,7 +4,7 @@ from ultralytics import YOLO
 import cv2
 import serial
 import time
-from pynput import keyboard
+import keyboard
 
 # VARIABLES
 sirina = 1280
@@ -34,15 +34,8 @@ time.sleep(2)
 
 
 # Manual settings
-def on_press(key):
-    keys_pressed.add(key.char)
-def on_release(key):
-    keys_pressed.discard(key.char)
+manual = False
 
-manual = True
-keys_pressed = set()
-listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-listener.start()
 
 # vrne vse razdalje
 def kalkulatorRazdalj(boxes, len):
@@ -76,12 +69,12 @@ def kotKalkulator(boxes, minInde, smer, odmikY):
         x = boxes[minInde][0]
         dolzina = abs(x- int(sirina) // 2)
         kotStopinje = math.degrees(math.atan(dolzina / focalX))
-        return kotStopinje
+        return kotStopinje - kotStopinje//3
     
     y = boxes[minInde][1]
     dolzina = abs(y - odmikY- int(visina) // 2)
     kotStopinje = math.degrees(math.atan(dolzina / focalY))
-    return kotStopinje
+    return kotStopinje - kotStopinje//3
 
 
 # Odmik po y glede na oddaljenost za natancnost
@@ -114,23 +107,27 @@ def smerPremika(boxes, minInde, smer, odmikY):
         dolzina = (x- int(sirina) // 2)
         if(dolzina > 0):
             return 1
-        return 0
+        return -1
     
     y = boxes[minInde][1]
     dolzina = (y - odmikY- int(visina) // 2)
     if(dolzina > 0):
-        return 0
-    return 1
+        return 1
+    return -1
  
 
+
+    
+
+
 # Poslje komando
-def sendCommand(smerX, smerY, kotX, kotY, microX, microY):
+def sendCommand(smerX, smerY, stepX, stepY, microX, microY):
     buffer= struct.pack(
-        '<BBffBB',
+        '<bbBBBB',
         smerX, 
         smerY, 
-        kotX, 
-        kotY, 
+        stepX, 
+        stepY, 
         microX,
         microY
     )
@@ -140,7 +137,8 @@ def sendCommand(smerX, smerY, kotX, kotY, microX, microY):
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
-    delay = 5
+    delay = 2
+    tolerancaStopinj = 1.3
     while True:
         microX = 0
         microY = 0
@@ -190,17 +188,24 @@ def izvedi(minInde, n):
                 microX = 1
             if razdaljaY < 300:
                 microY = 1
-
-            odmikY =  odmikOddaljenost(boxes, minInde)
+            
+            odmikY = odmikOddaljenost(boxes, minInde)
 
             smerX = smerPremika(boxes, minInde, 'x', 0)
             smerY = smerPremika(boxes, minInde, 'y', odmikY)
             
             kotX = kotKalkulator(boxes, minInde, 'x', 0)
             kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
+            stepX = (round)(kotX // (1.8))
+            stepY = (round)(kotY // (1.8))
 
-            sendCommand(smerX, smerY, kotX, kotY, microX, microY)
-            print("smer" , smerX, smerY,"kot: ", kotX, kotY)
+            if(kotX < tolerancaStopinj):
+                stepX = 0
+            if(kotY < tolerancaStopinj):
+                stepY = 0
+
+            sendCommand(smerX, smerY, stepX, stepY, microX, microY)
+            print("smer" , smerX, smerY,"kot: ", kotX, kotY, "steps: ", stepX, stepY)
 
         counter+=1
 
@@ -271,14 +276,16 @@ def Manual():
             cv2.circle(frame, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
             cv2.imshow("preview", frame)
 
-        if 'w' in keys_pressed:
-            sendCommand(1,1, 0, 4, 1,1)
-        if 's' in keys_pressed:
-            sendCommand(0,0, 0, 4, 1,1)
-        if 'd' in keys_pressed:
-            sendCommand(1,1, 4, 0, 1,1)
-        if 'a' in keys_pressed:
-            sendCommand(0,0, 4, 0, 1,1)
+        if keyboard.is_pressed('w'):
+            sendCommand(-1, -1, 0, 3, 1, 1)
+        elif keyboard.is_pressed('s'):
+            sendCommand(1, 1, 0, 3, 1, 1)
+        elif keyboard.is_pressed('d'):
+            sendCommand(1, 1, 3, 0, 1, 1)
+        elif keyboard.is_pressed('a'):
+            sendCommand(-1, -1, 3, 0, 1, 1)
+
+        # Quit with 
      # Quit
         if cv2.waitKey(1) == ord('q'):
             break
