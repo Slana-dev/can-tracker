@@ -6,7 +6,7 @@ import serial
 import time
 import keyboard
 
-# VARIABLES
+# SCREEN VARIABLES
 sirina = 1280
 visina = 720
 verticalFov = 57
@@ -17,6 +17,11 @@ focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
 windowName = "preview"
 
+# POSITION VARIABLES
+posX = 0
+posY = 0
+mejaKot = 54
+
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, sirina)
@@ -26,17 +31,15 @@ cap.set(cv2.CAP_PROP_FPS, 60)
 cv2.namedWindow(windowName)
 cv2.moveWindow(windowName, 0, 0)
 
-# Show display
+# SHOW DISPLAY
 display = True
 
 # ARDUINO
 arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
 time.sleep(2)
 
-
 # Manual settings
 manual = False
-
 
 # vrne vse razdalje
 def kalkulatorRazdalj(boxes, len):
@@ -53,7 +56,7 @@ def kalkulatorRazdalj(boxes, len):
 
 # najde indeks minimalne razdalje
 def minRazdaljaIndeks(dolzine, n):
-    min = 1000000
+    min = 10000
     i = 0
     minInde = -1
     for i in range(n):
@@ -161,7 +164,7 @@ def recenterY():
 def izvedi(minInde, n):
     counter = 0
     delay = 1
-
+    global posY, posX
     while True:
         microX = 0
         microY = 0
@@ -170,6 +173,14 @@ def izvedi(minInde, n):
         if not ret:
             break
 
+        if keyboard.is_pressed('r'):
+            recenterX()
+            time.sleep(2)
+            recenterY()
+            time.sleep(2)
+            posX = 0
+            posY = 0
+        
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
@@ -221,9 +232,17 @@ def izvedi(minInde, n):
             kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
             stepX = (round)(kotX // (1.8))
             stepY = (round)(kotY // (1.8))
-
-            sendCommand(smerX, smerY, stepX, stepY, microX, microY)
-            print("smer" , smerX, smerY,"kot: ", kotX, kotY, "steps: ", stepX, stepY)
+            if kotX > 1:
+                posX += kotX * smerX
+            if kotY > 1: 
+                posY += kotY * smerY
+            
+            if posX < mejaKot and posY < mejaKot:
+                sendCommand(smerX, smerY, stepX, stepY, microX, microY)
+            else: 
+                print("object out of bounds -> PLEASE RECENTER")
+                print(posX, posY)
+            #print("smer" , smerX, smerY,"kot: ", kotX, kotY, "steps: ", stepX, stepY)
 
         counter+=1
 
@@ -244,7 +263,15 @@ def mainLoop():
         ret, frame = cap.read()
         if not ret:
             break
-        
+
+        # Reset position
+        if keyboard.is_pressed('r'):
+            recenterX()
+            time.sleep(2)
+            recenterY()
+            posX = 0
+            posY = 0
+            
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
@@ -332,7 +359,6 @@ else:
     print("-----------------")
     print("controls:")
     print("Q / quit")
+    print("R / recenter position")
     print("-----------------")
-    recenterX()
-    recenterY()
     mainLoop()
