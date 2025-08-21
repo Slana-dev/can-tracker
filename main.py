@@ -10,13 +10,12 @@ import keyboard
 sirina = 1280
 visina = 720
 verticalFov = 57
-horizontalFov = 88
+horizontalFov = 58
 horizontalFov_rad = math.radians(horizontalFov)
 verticalFov_rad = math.radians(verticalFov)
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
-
-
+windowName = "preview"
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -24,9 +23,11 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, sirina)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, visina)
 model=YOLO(r"best.pt") 
 cap.set(cv2.CAP_PROP_FPS, 60)
+cv2.namedWindow(windowName)
+cv2.moveWindow(windowName, 0, 0)
 
 # Show display
-performance = True
+display = True
 
 # ARDUINO
 arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
@@ -69,12 +70,12 @@ def kotKalkulator(boxes, minInde, smer, odmikY):
         x = boxes[minInde][0]
         dolzina = abs(x- int(sirina) // 2)
         kotStopinje = math.degrees(math.atan(dolzina / focalX))
-        return kotStopinje - kotStopinje//3
+        return kotStopinje  
     
     y = boxes[minInde][1]
     dolzina = abs(y - odmikY- int(visina) // 2)
     kotStopinje = math.degrees(math.atan(dolzina / focalY))
-    return kotStopinje - kotStopinje//3
+    return kotStopinje 
 
 
 # Odmik po y glede na oddaljenost za natancnost
@@ -114,11 +115,6 @@ def smerPremika(boxes, minInde, smer, odmikY):
     if(dolzina > 0):
         return 1
     return -1
- 
-
-
-    
-
 
 # Poslje komando
 def sendCommand(smerX, smerY, stepX, stepY, microX, microY):
@@ -132,18 +128,45 @@ def sendCommand(smerX, smerY, stepX, stepY, microX, microY):
         microY
     )
     arduino.write(buffer)
+    return
 
+# Recenter at the start
+def onEdgeX():
+    readX = arduino.read(1)  
+    if readX == b'1':
+        return True
+    return False
+
+def onEdgeY():
+    readY = arduino.read(1)  
+    if readY == b'2':
+        return True
+    return False
+
+def recenterX():
+    edgeX = onEdgeX()
+    while not edgeX:
+        sendCommand(1,0,3,0,0,0)
+        edgeX = onEdgeX()
+    sendCommand(-1,0,60,0,1,1)      
+
+def recenterY(): 
+    edgeY = onEdgeX()
+    while not edgeY:
+        sendCommand(0,1,0,3,0,0)
+        edgeY = onEdgeY()
+    sendCommand(0,-1,0,60,1,1)  
 
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
-    delay = 2
-    tolerancaStopinj = 1.3
+    delay = 1
+
     while True:
         microX = 0
         microY = 0
-        ret, frame = cap.read()
 
+        ret, frame = cap.read()
         if not ret:
             break
 
@@ -158,15 +181,14 @@ def izvedi(minInde, n):
             verbose= False
         )
 
-        stBox = len(results[0].boxes)
-
         # Display
         anotacija= results[0].plot()
-        if(performance):
+        if(display):
             cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
-            cv2.imshow("preview", anotacija)
+            cv2.imshow(windowName, anotacija)
 
         # In case a box is lost
+        stBox = len(results[0].boxes)
         if stBox != n:
             print("RESET\n") 
             return
@@ -184,9 +206,10 @@ def izvedi(minInde, n):
             razdaljaX = razdaljaVzdolzOsi('x', minInde, boxes)
             razdaljaY = razdaljaVzdolzOsi('y', minInde, boxes)
             print(razdaljaX, razdaljaY)
-            if razdaljaX < 300:
+
+            if razdaljaX < 250:
                 microX = 1
-            if razdaljaY < 300:
+            if razdaljaY < 250:
                 microY = 1
             
             odmikY = odmikOddaljenost(boxes, minInde)
@@ -199,11 +222,6 @@ def izvedi(minInde, n):
             stepX = (round)(kotX // (1.8))
             stepY = (round)(kotY // (1.8))
 
-            if(kotX < tolerancaStopinj):
-                stepX = 0
-            if(kotY < tolerancaStopinj):
-                stepY = 0
-
             sendCommand(smerX, smerY, stepX, stepY, microX, microY)
             print("smer" , smerX, smerY,"kot: ", kotX, kotY, "steps: ", stepX, stepY)
 
@@ -215,16 +233,18 @@ def izvedi(minInde, n):
 
     cap.release()
     cv2.destroyAllWindows()
-    return       
+    return   
+
 
 def mainLoop():
     delay = 20
     frameCounter = 0
+    
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
+        
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
@@ -238,7 +258,7 @@ def mainLoop():
         
         # Display
         anotacija= results[0].plot()
-        if(performance):
+        if(display):
             cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
             cv2.imshow("preview", anotacija)
 
@@ -253,8 +273,8 @@ def mainLoop():
                 print("Najblizji:",minDolzinaInde, dolzine[minDolzinaInde])
                 izvedi(minDolzinaInde, n)
             else:
-                print("FREE ROAM")
-
+                print("NO CANS")
+                
         frameCounter+=1
         
         # Quit
@@ -272,20 +292,20 @@ def Manual():
         if not ret:
             break
 
-        if(performance):
+        if(display):
             cv2.circle(frame, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
             cv2.imshow("preview", frame)
 
         if keyboard.is_pressed('w'):
-            sendCommand(-1, -1, 0, 3, 1, 1)
+            sendCommand(-1, -1, 0, 3, 0, 0)
         elif keyboard.is_pressed('s'):
-            sendCommand(1, 1, 0, 3, 1, 1)
+            sendCommand(1, 1, 0, 3, 0, 0)
         elif keyboard.is_pressed('d'):
-            sendCommand(1, 1, 3, 0, 1, 1)
+            print(2)
+            sendCommand(1, 1, 2, 0, 0, 0)
         elif keyboard.is_pressed('a'):
-            sendCommand(-1, -1, 3, 0, 1, 1)
+            sendCommand(-1, -1, 3, 0, 0, 0)
 
-        # Quit with 
      # Quit
         if cv2.waitKey(1) == ord('q'):
             break
@@ -313,4 +333,6 @@ else:
     print("controls:")
     print("Q / quit")
     print("-----------------")
+    recenterX()
+    recenterY()
     mainLoop()
