@@ -22,7 +22,7 @@
 
 AccelStepper stepperX(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
 AccelStepper stepperY(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN);
-const int bytes = 6;
+const int bytes = 4;
 byte podatki[bytes];
 
 const int microMultiplier = 16;
@@ -38,10 +38,10 @@ void setup() {
   digitalWrite(ENABLE_PIN, LOW);
 
   stepperX.setMaxSpeed(10000);
-  stepperX.setAcceleration(700);
+  stepperX.setAcceleration(1000);
 
   stepperY.setMaxSpeed(10000);
-  stepperY.setAcceleration(700);
+  stepperY.setAcceleration(1000);
   Serial.begin(9600);
 
   pinMode(X_MS1, OUTPUT);
@@ -83,21 +83,15 @@ void loop() {
     int8_t smerY = (int8_t)podatki[1];
     stepsX = podatki[2];
     stepsY = podatki[3];
-    bool microX = podatki[4] == 1;
-    bool microY = podatki[5] == 1;
+    
 
-    if (microX) {
+    
       setMicrosteppingX(true);
       stepsX *= 8;
-    } else {
-      setMicrosteppingX(false);
-    }
-    if (microY) {
+    
       setMicrosteppingY(true);
       stepsY *= 8;
-    } else {
-      setMicrosteppingY(false);
-    }
+
     stepperX.move(stepsX * smerX);
     stepperY.move(stepsY * smerY);
   }

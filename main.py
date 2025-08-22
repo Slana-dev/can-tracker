@@ -20,7 +20,7 @@ windowName = "preview"
 # POSITION VARIABLES
 posX = 0
 posY = 0
-mejaKot = 54
+mejaStep = 400
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -120,15 +120,13 @@ def smerPremika(boxes, minInde, smer, odmikY):
     return -1
 
 # Poslje komando
-def sendCommand(smerX, smerY, stepX, stepY, microX, microY):
+def sendCommand(smerX, smerY, stepX, stepY):
     buffer= struct.pack(
-        '<bbBBBB',
+        '<bbBB',
         smerX, 
         smerY, 
         stepX, 
         stepY, 
-        microX,
-        microY
     )
     arduino.write(buffer)
     return
@@ -149,16 +147,18 @@ def onEdgeY():
 def recenterX():
     edgeX = onEdgeX()
     while not edgeX:
-        sendCommand(1,0,3,0,0,0)
+        sendCommand(1,0,3,0)
         edgeX = onEdgeX()
-    sendCommand(-1,0,60,0,1,1)      
+
+    sendCommand(-1,0,60,0)      
 
 def recenterY(): 
-    edgeY = onEdgeX()
+    edgeY = onEdgeY()
     while not edgeY:
-        sendCommand(0,1,0,3,0,0)
+        sendCommand(0,1,0,3)
         edgeY = onEdgeY()
-    sendCommand(0,-1,0,60,1,1)  
+
+    sendCommand(0,-1,0,60)  
 
 # izvede ukaze
 def izvedi(minInde, n):
@@ -166,8 +166,6 @@ def izvedi(minInde, n):
     delay = 1
     global posY, posX
     while True:
-        microX = 0
-        microY = 0
 
         ret, frame = cap.read()
         if not ret:
@@ -175,7 +173,7 @@ def izvedi(minInde, n):
 
         if keyboard.is_pressed('r'):
             recenterX()
-            time.sleep(2)
+            time.sleep(3)
             recenterY()
             time.sleep(2)
             posX = 0
@@ -214,14 +212,8 @@ def izvedi(minInde, n):
         # Move the robot
         if counter % delay == 0:
             
-            razdaljaX = razdaljaVzdolzOsi('x', minInde, boxes)
-            razdaljaY = razdaljaVzdolzOsi('y', minInde, boxes)
-            print(razdaljaX, razdaljaY)
-
-            if razdaljaX < 250:
-                microX = 1
-            if razdaljaY < 250:
-                microY = 1
+            microX = 1
+            microY = 1
             
             odmikY = odmikOddaljenost(boxes, minInde)
 
@@ -230,20 +222,18 @@ def izvedi(minInde, n):
             
             kotX = kotKalkulator(boxes, minInde, 'x', 0)
             kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
-            stepX = (round)(kotX // (1.8))
-            stepY = (round)(kotY // (1.8))
-            if kotX > 1:
-                posX += kotX * smerX
-            if kotY > 1: 
-                posY += kotY * smerY
-            
-            if posX < mejaKot and posY < mejaKot:
-                sendCommand(smerX, smerY, stepX, stepY, microX, microY)
-            else: 
-                print("object out of bounds -> PLEASE RECENTER")
-                print(posX, posY)
-            #print("smer" , smerX, smerY,"kot: ", kotX, kotY, "steps: ", stepX, stepY)
-
+            stepX = (round)(kotX / (1.8))
+            stepY = (round)(kotY / (1.8))
+           
+            print(posX, posY)
+            if stepX != 0 or stepY != 0:
+                if abs(posX + stepX * smerX) < mejaStep and abs(posY + stepY * smerY) < mejaStep:
+                        posX += stepX * smerX
+                        posY += stepY * smerY
+                        sendCommand(smerX, smerY, stepX, stepY)
+                else:
+                    print("object out of bounds -> PLEASE RECENTER")
+                
         counter+=1
 
         # Quit
@@ -254,11 +244,10 @@ def izvedi(minInde, n):
     cv2.destroyAllWindows()
     return   
 
-
 def mainLoop():
     delay = 20
     frameCounter = 0
-    
+    global posX,posY
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -267,8 +256,9 @@ def mainLoop():
         # Reset position
         if keyboard.is_pressed('r'):
             recenterX()
-            time.sleep(2)
+            time.sleep(3)
             recenterY()
+            time.sleep(2)
             posX = 0
             posY = 0
             
@@ -324,14 +314,14 @@ def Manual():
             cv2.imshow("preview", frame)
 
         if keyboard.is_pressed('w'):
-            sendCommand(-1, -1, 0, 3, 0, 0)
+            sendCommand(-1, -1, 0, 10)
         elif keyboard.is_pressed('s'):
-            sendCommand(1, 1, 0, 3, 0, 0)
+            sendCommand(1, 1, 0, 10)
         elif keyboard.is_pressed('d'):
             print(2)
-            sendCommand(1, 1, 2, 0, 0, 0)
+            sendCommand(1, 1, 10, 0)
         elif keyboard.is_pressed('a'):
-            sendCommand(-1, -1, 3, 0, 0, 0)
+            sendCommand(-1, -1, 10, 0)
 
      # Quit
         if cv2.waitKey(1) == ord('q'):
