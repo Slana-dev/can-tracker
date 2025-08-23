@@ -9,18 +9,13 @@ import keyboard
 # SCREEN VARIABLES
 sirina = 1280
 visina = 720
-verticalFov = 57
-horizontalFov = 58
+verticalFov = 60
+horizontalFov = 60
 horizontalFov_rad = math.radians(horizontalFov)
 verticalFov_rad = math.radians(verticalFov)
 focalX = (sirina / 2) / math.tan(horizontalFov_rad / 2)
 focalY = (visina / 2) / math.tan(verticalFov_rad / 2)
 windowName = "preview"
-
-# POSITION VARIABLES
-posX = 0
-posY = 0
-mejaStep = 400
 
 # DISPLAY
 cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)  
@@ -132,39 +127,28 @@ def sendCommand(smerX, smerY, stepX, stepY):
     return
 
 # Recenter at the start
-def onEdgeX():
-    readX = arduino.read(1)  
-    if readX == b'1':
-        return True
-    return False
-
-def onEdgeY():
-    readY = arduino.read(1)  
-    if readY == b'2':
-        return True
-    return False
-
 def recenterX():
-    edgeX = onEdgeX()
-    while not edgeX:
+    arduino.reset_input_buffer()
+    while True:
         sendCommand(1,0,3,0)
-        edgeX = onEdgeX()
-
+        if arduino.in_waiting == 1:
+            data = arduino.read(1)
+            break
     sendCommand(-1,0,60,0)      
 
-def recenterY(): 
-    edgeY = onEdgeY()
-    while not edgeY:
+def recenterY():
+    arduino.reset_input_buffer() 
+    while True:
         sendCommand(0,1,0,3)
-        edgeY = onEdgeY()
-
+        if arduino.in_waiting == 1:
+            data = arduino.read(1)
+            break
     sendCommand(0,-1,0,60)  
 
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
     delay = 1
-    global posY, posX
     while True:
 
         ret, frame = cap.read()
@@ -172,12 +156,11 @@ def izvedi(minInde, n):
             break
 
         if keyboard.is_pressed('r'):
+            arduino.reset_input_buffer()
             recenterX()
             time.sleep(3)
             recenterY()
             time.sleep(2)
-            posX = 0
-            posY = 0
         
         results = model.track(
             source=frame,
@@ -212,9 +195,6 @@ def izvedi(minInde, n):
         # Move the robot
         if counter % delay == 0:
             
-            microX = 1
-            microY = 1
-            
             odmikY = odmikOddaljenost(boxes, minInde)
 
             smerX = smerPremika(boxes, minInde, 'x', 0)
@@ -225,14 +205,12 @@ def izvedi(minInde, n):
             stepX = (round)(kotX / (1.8))
             stepY = (round)(kotY / (1.8))
            
-            print(posX, posY)
-            if stepX != 0 or stepY != 0:
-                if abs(posX + stepX * smerX) < mejaStep and abs(posY + stepY * smerY) < mejaStep:
-                        posX += stepX * smerX
-                        posY += stepY * smerY
+            
+            if stepX > 0 or stepY > 1:
+                if arduino.in_waiting == 0:
                         sendCommand(smerX, smerY, stepX, stepY)
                 else:
-                    print("object out of bounds -> PLEASE RECENTER")
+                    print("object out of bounds -> PLEASE PRESS R RECENTER")
                 
         counter+=1
 
@@ -247,7 +225,6 @@ def izvedi(minInde, n):
 def mainLoop():
     delay = 20
     frameCounter = 0
-    global posX,posY
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -255,13 +232,13 @@ def mainLoop():
 
         # Reset position
         if keyboard.is_pressed('r'):
+            arduino.reset_input_buffer()
             recenterX()
             time.sleep(3)
             recenterY()
             time.sleep(2)
-            posX = 0
-            posY = 0
-            
+
+
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
@@ -322,7 +299,7 @@ def Manual():
             sendCommand(1, 1, 10, 0)
         elif keyboard.is_pressed('a'):
             sendCommand(-1, -1, 10, 0)
-
+        
      # Quit
         if cv2.waitKey(1) == ord('q'):
             break
