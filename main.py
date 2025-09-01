@@ -127,19 +127,19 @@ def sendCommand(smerX, smerY, stepX, stepY):
     return
 
 # Recenter at the start
-def recenterX():
+def recenterXright():
     arduino.reset_input_buffer()
     while True:
-        sendCommand(1,0,3,0)
+        sendCommand(1,0,2,0)
         if arduino.in_waiting == 1:
             data = arduino.read(1)
             break
     sendCommand(-1,0,60,0)      
 
-def recenterY():
+def recenterXleft():
     arduino.reset_input_buffer() 
     while True:
-        sendCommand(0,1,0,3)
+        sendCommand(0,1,0,2)
         if arduino.in_waiting == 1:
             data = arduino.read(1)
             break
@@ -157,10 +157,9 @@ def izvedi(minInde, n):
 
         if keyboard.is_pressed('r'):
             arduino.reset_input_buffer()
-            recenterX()
+            recenterXright()
             time.sleep(3)
-            recenterY()
-            time.sleep(2)
+            
         
         results = model.track(
             source=frame,
@@ -205,13 +204,12 @@ def izvedi(minInde, n):
             stepX = (round)(kotX / (1.8))
             stepY = (round)(kotY / (1.8))
            
-            
+            print(arduino.in_waiting)
             if stepX > 0 or stepY > 1:
                 if arduino.in_waiting == 0:
                         sendCommand(smerX, smerY, stepX, stepY)
                 else:
                     print("object out of bounds -> PLEASE PRESS R RECENTER")
-                
         counter+=1
 
         # Quit
@@ -233,10 +231,8 @@ def mainLoop():
         # Reset position
         if keyboard.is_pressed('r'):
             arduino.reset_input_buffer()
-            recenterX()
+            recenterXright()
             time.sleep(3)
-            recenterY()
-            time.sleep(2)
 
 
         results = model.track(

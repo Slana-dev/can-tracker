@@ -28,10 +28,10 @@ byte podatki[bytes];
 const int microMultiplier = 16;
 int stepsX = 0;
 int stepsY = 0;
-int edgeX;
-int edgeY;
-int lastStateX = HIGH; 
-int lastStateY = HIGH;
+int edgeXright;
+int edgeXleft;
+int lastStateXright = HIGH; 
+int lastStateXleft = HIGH;
 
 void setup() {
   pinMode(ENABLE_PIN, OUTPUT);
@@ -50,8 +50,8 @@ void setup() {
   pinMode(Y_MS1, OUTPUT);
   pinMode(Y_MS2, OUTPUT);
   pinMode(Y_MS3, OUTPUT);
-  pinMode(X_EDGE, INPUT);
-  pinMode(Y_EDGE, INPUT);
+  pinMode(X_EDGE_RIGHT, INPUT);
+  pinMode(X_EDGE_LEFT, INPUT);
 }
 
 void setMicrosteppingX(bool enable) {
@@ -67,16 +67,18 @@ void setMicrosteppingY(bool enable) {
 }
 
 void loop() {
-  edgeX = digitalRead(X_EDGE);
-  edgeY = digitalRead(Y_EDGE);
-  if (lastStateX == HIGH && edgeX == LOW){
+  
+  edgeXright = digitalRead(X_EDGE_RIGHT);
+  edgeXleft = digitalRead(X_EDGE_LEFT);
+  if (lastStateXright == HIGH && edgeXright == LOW){
     Serial.write('1');
   }
-  if (lastStateY == HIGH && edgeY == LOW){
+  if (lastStateXleft == HIGH && edgeXleft == LOW){
     Serial.write('2');
   }
-  lastStateX = edgeX;
-  lastStateY = edgeY;
+  lastStateXright = edgeXright;
+  lastStateXleft = edgeXleft;
+
   if (Serial.available() == bytes) {
     Serial.readBytes(podatki, bytes);
     int8_t smerX = (int8_t)podatki[0];
