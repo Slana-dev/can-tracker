@@ -306,6 +306,7 @@ def mainLoop():
 
 def Manual():
     standbyCopy = standby
+    shootCopy = shoot
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -324,7 +325,11 @@ def Manual():
             sendCommand(1, 1, 10, 0,standbyCopy)
         elif keyboard.is_pressed('a'):
             sendCommand(-1, -1, 10, 0,standbyCopy)
-        
+        elif keyboard.is_pressed('enter'):
+            sendCommand(0,0,0,0,shootCopy)
+            time.sleep(1)
+            sendCommand(0,0,0,0,standbyCopy)
+
      # Quit
         if cv2.waitKey(1) == ord('q'):
             break
