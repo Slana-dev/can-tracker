@@ -36,6 +36,10 @@ time.sleep(2)
 # Manual settings
 manual = False
 
+# speed
+standby = 8
+shoot = 10
+
 # vrne vse razdalje
 def kalkulatorRazdalj(boxes, len):
     i = 0
@@ -115,13 +119,14 @@ def smerPremika(boxes, minInde, smer, odmikY):
     return -1
 
 # Poslje komando
-def sendCommand(smerX, smerY, stepX, stepY):
+def sendCommand(smerX, smerY, stepX, stepY, speed):
     buffer= struct.pack(
-        '<bbBB',
+        '<bbBBB',
         smerX, 
         smerY, 
         stepX, 
         stepY, 
+        speed
     )
     arduino.write(buffer)
     return
@@ -145,10 +150,24 @@ def recenterXleft():
             break
     sendCommand(0,-1,0,60)  
 
+
+# pospesevanje motorjev za streljanje
+def standbyThrottle():
+    i = 0
+    standbyCopy = standby
+    for i in range(standbyCopy):
+        sendCommand(0,0,0,0,i)
+        time.sleep(1.5)
+    return 
+
+def streljaj():
+    sendCommand(0,0,0,0,shoot)
+
 # izvede ukaze
 def izvedi(minInde, n):
     counter = 0
     delay = 1
+    standbyCopy = standby
     while True:
 
         ret, frame = cap.read()
@@ -182,12 +201,16 @@ def izvedi(minInde, n):
         stBox = len(results[0].boxes)
         if stBox != n:
             print("RESET\n") 
+            # return turret to standby
+            sendCommand(0,0,0,0,standbyCopy)
             return
         
         boxes = results[0].boxes.xywh.cpu().numpy()
 
         # In case indexes shift
         if minInde >= len(boxes):
+            # return turret to standby
+            sendCommand(0,0,0,0,standbyCopy)
             print("RESET\n")  
             return
         
@@ -205,11 +228,15 @@ def izvedi(minInde, n):
             stepY = (round)(kotY / (1.8))
            
             print(arduino.in_waiting)
-            if stepX > 0 or stepY > 1:
+            if stepX > 1 or stepY > 1:
                 if arduino.in_waiting == 0:
-                        sendCommand(smerX, smerY, stepX, stepY)
+                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy)
                 else:
                     print("object out of bounds -> PLEASE PRESS R RECENTER")
+            else:
+                print("shooting!")
+                streljaj()
+
         counter+=1
 
         # Quit
@@ -219,6 +246,8 @@ def izvedi(minInde, n):
     cap.release()
     cv2.destroyAllWindows()
     return   
+
+
 
 def mainLoop():
     delay = 20
@@ -233,7 +262,6 @@ def mainLoop():
             arduino.reset_input_buffer()
             recenterXright()
             time.sleep(3)
-
 
         results = model.track(
             source=frame,
@@ -277,6 +305,7 @@ def mainLoop():
     return
 
 def Manual():
+    standbyCopy = standby
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -287,14 +316,14 @@ def Manual():
             cv2.imshow("preview", frame)
 
         if keyboard.is_pressed('w'):
-            sendCommand(-1, -1, 0, 10)
+            sendCommand(-1, -1, 0, 10,standbyCopy)
         elif keyboard.is_pressed('s'):
-            sendCommand(1, 1, 0, 10)
+            sendCommand(1, 1, 0, 10, standbyCopy)
         elif keyboard.is_pressed('d'):
             print(2)
-            sendCommand(1, 1, 10, 0)
+            sendCommand(1, 1, 10, 0,standbyCopy)
         elif keyboard.is_pressed('a'):
-            sendCommand(-1, -1, 10, 0)
+            sendCommand(-1, -1, 10, 0,standbyCopy)
         
      # Quit
         if cv2.waitKey(1) == ord('q'):
@@ -324,4 +353,5 @@ else:
     print("Q / quit")
     print("R / recenter position")
     print("-----------------")
+    standbyThrottle()
     mainLoop()
