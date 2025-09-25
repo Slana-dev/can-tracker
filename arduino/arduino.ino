@@ -2,7 +2,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <Servo.h>
-Servo ESC;
+Servo ESC1;
+Servo ESC2;
 
 #define X_STEP_PIN 54
 #define X_DIR_PIN 55
@@ -22,34 +23,31 @@ Servo ESC;
 #define X_EDGE_RIGHT 16
 #define X_EDGE_LEFT 17 
 
-#define ESC_PIN 9
+#define ESC_PIN1 23
+#define ESC_PIN2 25
 
 AccelStepper stepperX(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
 AccelStepper stepperY(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN);
 
-const int bytes = 5;
+const int bytes = 6;
 byte podatki[bytes];
 
 int hitrosti[] = {
   1200,
-  1225,
-  1250,
-  1300,
-  1350,
+  1245,
   1400,
-  1500,
-  1600,
-  1700,
-  1800,
   2000,
 };
 
-const int microMultiplier = 16;
 int stepsX = 0;
 int stepsY = 0;
-int speed = 0;
+
+int speed1 = 0;
+int speed2 = 0;
+
 int edgeXright;
 int edgeXleft;
+
 int lastStateXright = HIGH;
 int lastStateXleft = HIGH;
 
@@ -63,7 +61,7 @@ void setup()
 
   stepperY.setMaxSpeed(10000);
   stepperY.setAcceleration(1000);
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   pinMode(X_MS1, OUTPUT);
   pinMode(X_MS2, OUTPUT);
@@ -74,9 +72,11 @@ void setup()
   pinMode(X_EDGE_RIGHT, INPUT);
   pinMode(X_EDGE_LEFT, INPUT);
 
-  ESC.attach(9);
-  ESC.writeMicroseconds(1200); // nastavi minimum throttle
-  delay(2000);
+  ESC1.attach(ESC_PIN1);
+  ESC2.attach(ESC_PIN2);
+  ESC1.writeMicroseconds(1200); // nastavi minimum throttle
+  ESC2.writeMicroseconds(1200);
+  delay(1000);
 }
 
 void setMicrosteppingX(bool enable)
@@ -109,14 +109,16 @@ void loop()
   lastStateXright = edgeXright;
   lastStateXleft = edgeXleft;
 
-  if (Serial.available() == bytes)
+  if (Serial.available() >= bytes)
   {
     Serial.readBytes(podatki, bytes);
     int8_t smerX = (int8_t)podatki[0];
     int8_t smerY = (int8_t)podatki[1];
     stepsX = podatki[2];
     stepsY = podatki[3];
-    speed = podatki[4];
+    speed1 = podatki[4];
+    speed2 = podatki[5];
+
     setMicrosteppingX(true);
     stepsX *= 8;
 
@@ -125,7 +127,8 @@ void loop()
 
     stepperX.move(stepsX * smerX);
     stepperY.move(stepsY * smerY);
-    ESC.writeMicroseconds(hitrosti[speed]);
+    ESC1.writeMicroseconds(hitrosti[speed1]);
+    ESC2.writeMicroseconds(hitrosti[speed2]);
   }
   stepperX.run();
   stepperY.run();
