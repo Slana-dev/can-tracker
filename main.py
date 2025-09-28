@@ -119,15 +119,16 @@ def smerPremika(boxes, minInde, smer, odmikY):
     return -1
 
 # Poslje komando
-def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2):
+def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz):
     buffer= struct.pack(
-        '<bbBBBB',
+        '<bbBBBBB',
         smerX, 
         smerY, 
         stepX, 
         stepY, 
         speed1,
-        speed2
+        speed2,
+        polz
     )
     arduino.write(buffer)
     return
@@ -136,38 +137,38 @@ def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2):
 def recenterXright():
     arduino.reset_input_buffer()
     while True:
-        sendCommand(1,0,2,0,standby,standby)
+        sendCommand(1,0,2,0,standby,standby,0)
         if arduino.in_waiting == 1:
             data = arduino.read(1)
             break
-    sendCommand(-1,0,60,0,standby,standby)      
+    sendCommand(-1,0,60,0,standby,standby,0)      
 
 def recenterXleft():
     arduino.reset_input_buffer() 
     while True:
-        sendCommand(0,1,0,2,standby,standby)
+        sendCommand(0,1,0,2,standby,standby,0)
         if arduino.in_waiting == 1:
             data = arduino.read(1)
             break
-    sendCommand(0,-1,0,60,standby,standby)  
+    sendCommand(0,-1,0,60,standby,standby,0)  
 
 
 # pospesevanje motorjev za streljanje
 def standbyThrottle():
-    sendCommand(0,0,0,0,0,0)
+    sendCommand(0,0,0,0,0,0,0)
     print("cakam")
     time.sleep(15)
-    sendCommand(0,0,0,0,1,1)
+    sendCommand(0,0,0,0,1,1,0)
     time.sleep(0.6)
-    sendCommand(0,0,0,0,0,0)
+    sendCommand(0,0,0,0,0,0,0)
     time.sleep(0.1)
-    sendCommand(0,0,0,0,1,1)
+    sendCommand(0,0,0,0,1,1,0)
     time.sleep(1)
-    sendCommand(0,0,0,0,standby,standby)
+    sendCommand(0,0,0,0,standby,standby,0)
     print("konec")
 
 def streljaj():
-    sendCommand(0,0,0,0,shoot,shoot)
+    sendCommand(0,0,0,0,shoot,shoot,1)
 
 # izvede ukaze
 def izvedi(minInde, n):
@@ -207,7 +208,7 @@ def izvedi(minInde, n):
         if stBox != n:
             print("RESET\n") 
             # return turret to standby
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy)
+            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
             return
         
         boxes = results[0].boxes.xywh.cpu().numpy()
@@ -215,7 +216,7 @@ def izvedi(minInde, n):
         # In case indexes shift
         if minInde >= len(boxes):
             # return turret to standby
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy)
+            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
             print("RESET\n")  
             return
         
@@ -235,7 +236,7 @@ def izvedi(minInde, n):
             print(arduino.in_waiting)
             if stepX > 1 or stepY > 1:
                 if arduino.in_waiting == 0:
-                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy)
+                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy,0)
                 else:
                     print("object out of bounds -> PLEASE PRESS R RECENTER")
             else:
@@ -322,17 +323,17 @@ def Manual():
             cv2.imshow("preview", frame)
 
         if keyboard.is_pressed('w'):
-            sendCommand(-1, -1, 0, 10,standbyCopy, standbyCopy)
+            sendCommand(-1, -1, 0, 10,standbyCopy, standbyCopy,0)
         elif keyboard.is_pressed('s'):
-            sendCommand(1, 1, 0, 10, standbyCopy, standbyCopy)
+            sendCommand(1, 1, 0, 10, standbyCopy, standbyCopy,0)
         elif keyboard.is_pressed('d'):
             print(2)
-            sendCommand(1, 1, 10, 0,standbyCopy, standbyCopy)
+            sendCommand(1, 1, 10, 0,standbyCopy, standbyCopy,0)
         elif keyboard.is_pressed('a'):
-            sendCommand(-1, -1, 10, 0,standbyCopy, standbyCopy)
+            sendCommand(-1, -1, 10, 0,standbyCopy, standbyCopy,0)
         elif keyboard.is_pressed('enter'):
-            sendCommand(0,0,0,0,shootCopy, shootCopy)
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy)
+            sendCommand(0,0,0,0,shootCopy, shootCopy,1)
+            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
 
      # Quit
         if cv2.waitKey(1) == ord('q'):
@@ -341,7 +342,6 @@ def Manual():
     cap.release()
     cv2.destroyAllWindows()
     return       
-
 
 if manual:
     print("MANUAL")

@@ -26,10 +26,12 @@ Servo ESC2;
 #define ESC_PIN1 23
 #define ESC_PIN2 25
 
+#define POLZ_PIN 27
+
 AccelStepper stepperX(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
 AccelStepper stepperY(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN);
 
-const int bytes = 6;
+const int bytes = 7;
 byte podatki[bytes];
 
 int hitrosti[] = {
@@ -50,6 +52,7 @@ int edgeXleft;
 
 int lastStateXright = HIGH;
 int lastStateXleft = HIGH;
+bool strel = false;
 
 void setup()
 {
@@ -72,6 +75,8 @@ void setup()
   pinMode(X_EDGE_RIGHT, INPUT);
   pinMode(X_EDGE_LEFT, INPUT);
 
+  pinMode(POLZ_PIN, OUTPUT);
+  
   ESC1.attach(ESC_PIN1);
   ESC2.attach(ESC_PIN2);
   ESC1.writeMicroseconds(1200); // nastavi minimum throttle
@@ -118,6 +123,7 @@ void loop()
     stepsY = podatki[3];
     speed1 = podatki[4];
     speed2 = podatki[5];
+    strel = (podatki[6] == 1);
 
     setMicrosteppingX(true);
     stepsX *= 8;
@@ -127,8 +133,11 @@ void loop()
 
     stepperX.move(stepsX * smerX);
     stepperY.move(stepsY * smerY);
+
     ESC1.writeMicroseconds(hitrosti[speed1]);
     ESC2.writeMicroseconds(hitrosti[speed2]);
+
+    digitalWrite(POLZ_PIN, strel ? HIGH : LOW);
   }
   stepperX.run();
   stepperY.run();
