@@ -30,10 +30,10 @@ cv2.moveWindow(windowName, 0, 0)
 display = True
 
 # ARDUINO
-arduino = serial.Serial(port='COM4', baudrate=9600, timeout=1)
+arduino = serial.Serial(port='COM5', baudrate=9600, timeout=1)
 time.sleep(2)
 
-# Manual settings
+# Manual control
 manual = False
 
 # speed
@@ -70,7 +70,7 @@ def minRazdaljaIndeks(dolzine, n):
 def kotKalkulator(boxes, minInde, smer, odmikY):
     if smer == 'x':
         x = boxes[minInde][0]
-        dolzina = abs(x- int(sirina) // 2)
+        dolzina = abs(x- int(sirina) // 2) 
         kotStopinje = math.degrees(math.atan(dolzina / focalX))
         return kotStopinje  
     
@@ -115,20 +115,22 @@ def smerPremika(boxes, minInde, smer, odmikY):
     y = boxes[minInde][1]
     dolzina = (y - odmikY- int(visina) // 2)
     if(dolzina > 0):
-        return 1
-    return -1
+        return -1
+    return 1
 
 # Poslje komando
-def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz):
+def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz, multX, multY):
     buffer= struct.pack(
-        '<bbBBBBB',
+        '<bbBBBBBBB',
         smerX, 
         smerY, 
         stepX, 
         stepY, 
         speed1,
         speed2,
-        polz
+        polz,
+        multX,
+        multY
     )
     arduino.write(buffer)
     return
@@ -137,38 +139,38 @@ def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz):
 def recenterXright():
     arduino.reset_input_buffer()
     while True:
-        sendCommand(1,0,2,0,standby,standby,0)
-        if arduino.in_waiting == 1:
+        sendCommand(1,0,2,0,standby,standby,0,1,1)
+        if arduino.in_waiting >= 1:
             data = arduino.read(1)
             break
-    sendCommand(-1,0,60,0,standby,standby,0)      
+    sendCommand(-1,0,60,0,standby,standby,0,1,1)      
 
 def recenterXleft():
     arduino.reset_input_buffer() 
     while True:
-        sendCommand(0,1,0,2,standby,standby,0)
-        if arduino.in_waiting == 1:
-            data = arduino.read(1)
+        sendCommand(0,1,0,2,standby,standby,0,1,1)
+        if arduino.in_waiting >= 1:
+            data = arduino.read(arduino.in_waiting)
             break
-    sendCommand(0,-1,0,60,standby,standby,0)  
+    sendCommand(0,-1,0,60,standby,standby,0,1,1)  
 
 
 # pospesevanje motorjev za streljanje
 def standbyThrottle():
-    sendCommand(0,0,0,0,0,0,0)
-    print("cakam")
+    sendCommand(0,0,0,0,0,0,0,1,1)
+    print("prizgi esc")
     time.sleep(15)
-    sendCommand(0,0,0,0,1,1,0)
+    sendCommand(0,0,0,0,1,1,0,1,1)
     time.sleep(0.6)
-    sendCommand(0,0,0,0,0,0,0)
+    sendCommand(0,0,0,0,0,0,0,1,1)
     time.sleep(0.1)
-    sendCommand(0,0,0,0,1,1,0)
+    sendCommand(0,0,0,0,1,1,0,1,1)
     time.sleep(1)
-    sendCommand(0,0,0,0,standby,standby,0)
+    sendCommand(0,0,0,0,standby,standby,0,1,1)
     print("konec")
 
 def streljaj():
-    sendCommand(0,0,0,0,shoot,shoot,1)
+    sendCommand(0,0,0,0,shoot,shoot,1,1,1)
 
 # izvede ukaze
 def izvedi(minInde, n):
@@ -180,17 +182,19 @@ def izvedi(minInde, n):
         ret, frame = cap.read()
         if not ret:
             break
-
+        if(keyboard.is_pressed('space')):
+            sendCommand(0,0,0,0,0,0,0)
         if keyboard.is_pressed('r'):
             arduino.reset_input_buffer()
             recenterXright()
+            arduino.reset_input_buffer()
             time.sleep(3)
         
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
             classes=[0],
-            conf=0.15,
+            conf=0.2,
             iou=0.3,
             persist=True,
             device='cuda',
@@ -208,7 +212,7 @@ def izvedi(minInde, n):
         if stBox != n:
             print("RESET\n") 
             # return turret to standby
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
+            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0,1,1)
             return
         
         boxes = results[0].boxes.xywh.cpu().numpy()
@@ -216,15 +220,16 @@ def izvedi(minInde, n):
         # In case indexes shift
         if minInde >= len(boxes):
             # return turret to standby
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
+            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0,1,1)
             print("RESET\n")  
             return
         
         # Move the robot
         if counter % delay == 0:
             
-            odmikY = odmikOddaljenost(boxes, minInde)
-
+            odmikY = 0
+            multiplyX = 16
+            multiplyY = 16
             smerX = smerPremika(boxes, minInde, 'x', 0)
             smerY = smerPremika(boxes, minInde, 'y', odmikY)
             
@@ -232,11 +237,15 @@ def izvedi(minInde, n):
             kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
             stepX = (round)(kotX / (1.8))
             stepY = (round)(kotY / (1.8))
-           
+            if kotX < 1.8:
+                stepX = round(kotX * 16 / 1.8)
+                multiplyX = 1
+                streljaj()
+                
             print(arduino.in_waiting)
-            if stepX > 1 or stepY > 1:
+            if stepX >= 1 or stepY >= 1:
                 if arduino.in_waiting == 0:
-                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy,0)
+                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy,0,multiplyX, multiplyY )
                 else:
                     print("object out of bounds -> PLEASE PRESS R RECENTER")
             else:
@@ -323,18 +332,18 @@ def Manual():
             cv2.imshow("preview", frame)
 
         if keyboard.is_pressed('w'):
-            sendCommand(-1, -1, 0, 10,standbyCopy, standbyCopy,0)
+            sendCommand(1, 1, 0, 10,standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('s'):
-            sendCommand(1, 1, 0, 10, standbyCopy, standbyCopy,0)
+            sendCommand(-1, -1, 0, 10, standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('d'):
             print(2)
-            sendCommand(1, 1, 10, 0,standbyCopy, standbyCopy,0)
+            sendCommand(1, 1, 10, 0,standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('a'):
-            sendCommand(-1, -1, 10, 0,standbyCopy, standbyCopy,0)
+            sendCommand(-1, -1, 10, 0,standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('enter'):
-            sendCommand(0,0,0,0,shootCopy, shootCopy,1)
-            sendCommand(0,0,0,0,standbyCopy, standbyCopy,0)
-
+            sendCommand(0,0,0,0,shootCopy, shootCopy,1,1,1)
+        else:
+            sendCommand(0,0,0,0, standbyCopy, standbyCopy,0,1,1)   
      # Quit
         if cv2.waitKey(1) == ord('q'):
             break
@@ -351,7 +360,7 @@ if manual:
     print("S / down")
     print("D / right")
     print("A / left")
-    print("SPACE / shoot")
+    print("ENTER / shoot")
     print("Q / quit")
     print("-----------------")
     standbyThrottle()
