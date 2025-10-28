@@ -7,7 +7,8 @@ import time
 import keyboard
 
 # SCREEN VARIABLES
-sirina = 1280
+sirinaOffset = 10
+sirina = 1280 + sirinaOffset
 visina = 720
 verticalFov = 60
 horizontalFov = 60
@@ -80,21 +81,6 @@ def kotKalkulator(boxes, minInde, smer, odmikY):
     return kotStopinje 
 
 
-# Odmik po y glede na oddaljenost za natancnost
-def odmikOddaljenost(boxes, minInde):
-    heightBox = boxes[minInde][3]
-    razmerje = heightBox / visina
-    
-    if razmerje > 0.3:
-        return 0
-    elif razmerje <= 0.3 and razmerje > 0.2:
-        return heightBox / 4
-    elif razmerje <= 0.2 and razmerje > 0.1:
-        return heightBox/ 2
-    else: 
-        return heightBox
-
-
 # vrne razdaljo vzdolz podate osi
 def razdaljaVzdolzOsi(os, minInde, boxes):
     if os == 'x':
@@ -135,25 +121,16 @@ def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz, multX, multY):
     arduino.write(buffer)
     return
 
-# Recenter at the start
-def recenterXright():
+# Recenter 
+def recenter():
+    data = arduino.read(arduino.in_waiting)
+    if data == '1':
+        sendCommand(0,-1,0,60,standby,standby,0,8,8)
+    else:
+        sendCommand(-1,0,60,0,standby,standby,0,8,8)
+
     arduino.reset_input_buffer()
-    while True:
-        sendCommand(1,0,2,0,standby,standby,0,1,1)
-        if arduino.in_waiting >= 1:
-            data = arduino.read(1)
-            break
-    sendCommand(-1,0,60,0,standby,standby,0,1,1)      
-
-def recenterXleft():
-    arduino.reset_input_buffer() 
-    while True:
-        sendCommand(0,1,0,2,standby,standby,0,1,1)
-        if arduino.in_waiting >= 1:
-            data = arduino.read(arduino.in_waiting)
-            break
-    sendCommand(0,-1,0,60,standby,standby,0,1,1)  
-
+    return
 
 # pospesevanje motorjev za streljanje
 def standbyThrottle():
@@ -174,22 +151,23 @@ def streljaj():
 
 # izvede ukaze
 def izvedi(minInde, n):
-    counter = 0
-    delay = 1
     standbyCopy = standby
-    while True:
 
+    while True:
         ret, frame = cap.read()
+
         if not ret:
             break
+
         if(keyboard.is_pressed('space')):
-            sendCommand(0,0,0,0,0,0,0)
-        if keyboard.is_pressed('r'):
-            arduino.reset_input_buffer()
-            recenterXright()
-            arduino.reset_input_buffer()
-            time.sleep(3)
+            sendCommand(0,0,0,0,0,0,0,1,1)
         
+        if(keyboard.is_pressed('e')):
+            arduino.reset_input_buffer()
+        
+        if arduino.in_waiting > 0:
+            recenter()
+
         results = model.track(
             source=frame,
             tracker="bytetrack.yaml",
@@ -225,34 +203,32 @@ def izvedi(minInde, n):
             return
         
         # Move the robot
-        if counter % delay == 0:
-            
-            odmikY = 0
-            multiplyX = 16
-            multiplyY = 16
-            smerX = smerPremika(boxes, minInde, 'x', 0)
-            smerY = smerPremika(boxes, minInde, 'y', odmikY)
-            
-            kotX = kotKalkulator(boxes, minInde, 'x', 0)
-            kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
-            stepX = (round)(kotX / (1.8))
-            stepY = (round)(kotY / (1.8))
-            if kotX < 1.8:
-                stepX = round(kotX * 16 / 1.8)
-                multiplyX = 1
-                streljaj()
-                
-            print(arduino.in_waiting)
-            if stepX >= 1 or stepY >= 1:
-                if arduino.in_waiting == 0:
-                    sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy,0,multiplyX, multiplyY )
-                else:
-                    print("object out of bounds -> PLEASE PRESS R RECENTER")
-            else:
-                print("shooting!")
-                streljaj()
+        multiplyX = 16
+        multiplyY = 16
+        smerX = smerPremika(boxes, minInde, 'x', 0)
+        smerY = smerPremika(boxes, minInde, 'y', 0)
+        
+        kotX = kotKalkulator(boxes, minInde, 'x', 0)
+        kotY = kotKalkulator(boxes, minInde, 'y', 0)
 
-        counter+=1
+        stepX = (round)(kotX / (1.8))
+        stepY = (round)(kotY / (1.8))
+
+        if kotX < 1.8:
+            stepX = round(kotX * 16 / 1.8)
+            multiplyX = 1
+        if kotY < 1.8:
+            stepY = round(kotY * 16 / 1.8)
+
+        if kotX < 0.5 and kotY < 1.8:
+            stepX = 0 
+            stepY = 0
+
+        if stepX > 0 or stepY > 0:
+                sendCommand(smerX, smerY, stepX, stepY, standbyCopy, standbyCopy,0,multiplyX, multiplyY )
+        else:
+            print("shooting!")
+            streljaj()
 
         # Quit
         if cv2.waitKey(1) == ord('q'):
@@ -262,21 +238,17 @@ def izvedi(minInde, n):
     cv2.destroyAllWindows()
     return   
 
-
-
 def mainLoop():
-    delay = 20
-    frameCounter = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Reset position
-        if keyboard.is_pressed('r'):
-            arduino.reset_input_buffer()
-            recenterXright()
-            time.sleep(3)
+        if(keyboard.is_pressed('space')):
+            sendCommand(0,0,0,0,0,0,0,1,1)
+
+        if arduino.in_waiting > 0:
+            recenter()
 
         results = model.track(
             source=frame,
@@ -295,20 +267,18 @@ def mainLoop():
             cv2.circle(anotacija, (int(sirina) // 2, int(visina) // 2), 5, (0, 0, 255), -1)
             cv2.imshow("preview", anotacija)
 
-        if frameCounter % delay == 0:
-            n = len(results[0].boxes)
-            if(n != 0):
-                boxes = results[0].boxes.xywh.cpu().numpy()
-                # Vse razdalje in minIndeks
-                dolzine = kalkulatorRazdalj(boxes, n)
-                minDolzinaInde = minRazdaljaIndeks(dolzine, n)
-                # Izvedi ukaze za minIndeks
-                print("Najblizji:",minDolzinaInde, dolzine[minDolzinaInde])
-                izvedi(minDolzinaInde, n)
-            else:
-                print("NO CANS")
-                
-        frameCounter+=1
+        
+        n = len(results[0].boxes)
+        if(n != 0):
+            boxes = results[0].boxes.xywh.cpu().numpy()
+            # Vse razdalje in minIndeks
+            dolzine = kalkulatorRazdalj(boxes, n)
+            minDolzinaInde = minRazdaljaIndeks(dolzine, n)
+            # Izvedi ukaze za minIndeks
+            print("Najblizji:",minDolzinaInde, dolzine[minDolzinaInde])
+            izvedi(minDolzinaInde, n)
+        else:
+            print("NO CANS")
         
         # Quit
         if cv2.waitKey(1) == ord('q'):
@@ -336,7 +306,6 @@ def Manual():
         elif keyboard.is_pressed('s'):
             sendCommand(-1, -1, 0, 10, standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('d'):
-            print(2)
             sendCommand(1, 1, 10, 0,standbyCopy, standbyCopy,0,1,1)
         elif keyboard.is_pressed('a'):
             sendCommand(-1, -1, 10, 0,standbyCopy, standbyCopy,0,1,1)
@@ -344,7 +313,10 @@ def Manual():
             sendCommand(0,0,0,0,shootCopy, shootCopy,1,1,1)
         else:
             sendCommand(0,0,0,0, standbyCopy, standbyCopy,0,1,1)   
-     # Quit
+     
+        if keyboard.is_pressed('space'):
+            sendCommand(0,0,0,0, 0,0,0,1,1) 
+
         if cv2.waitKey(1) == ord('q'):
             break
 
@@ -363,6 +335,7 @@ if manual:
     print("ENTER / shoot")
     print("Q / quit")
     print("-----------------")
+    arduino.reset_input_buffer()
     standbyThrottle()
     Manual()
 else:
@@ -372,5 +345,6 @@ else:
     print("Q / quit")
     print("R / recenter position")
     print("-----------------")
+    arduino.reset_input_buffer()
     standbyThrottle()
     mainLoop()

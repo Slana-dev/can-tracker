@@ -23,22 +23,23 @@ Servo ESC2;
 #define X_EDGE_RIGHT 16
 #define X_EDGE_LEFT 17 
 
-#define ESC_PIN1 23
-#define ESC_PIN2 25
+#define ESC_PIN1 4
+#define ESC_PIN2 6
 
 #define POLZ_PIN 27
 
 AccelStepper stepperX(AccelStepper::DRIVER, X_STEP_PIN, X_DIR_PIN);
 AccelStepper stepperY(AccelStepper::DRIVER, Y_STEP_PIN, Y_DIR_PIN);
 
-const int bytes = 7;
+const int bytes = 9;
 byte podatki[bytes];
 
 int hitrosti[] = {
   1200,
   1245,
+  1300,
   1400,
-  2000,
+  
 };
 
 int stepsX = 0;
@@ -49,7 +50,8 @@ int speed2 = 0;
 
 int edgeXright;
 int edgeXleft;
-
+int multX = 1;
+int multY = 1;
 int lastStateXright = HIGH;
 int lastStateXleft = HIGH;
 bool strel = false;
@@ -72,8 +74,8 @@ void setup()
   pinMode(Y_MS1, OUTPUT);
   pinMode(Y_MS2, OUTPUT);
   pinMode(Y_MS3, OUTPUT);
-  pinMode(X_EDGE_RIGHT, INPUT);
-  pinMode(X_EDGE_LEFT, INPUT);
+  pinMode(X_EDGE_RIGHT, INPUT_PULLUP);
+  pinMode(X_EDGE_LEFT, INPUT_PULLUP);
 
   pinMode(POLZ_PIN, OUTPUT);
   
@@ -103,11 +105,11 @@ void loop()
 
   edgeXright = digitalRead(X_EDGE_RIGHT);
   edgeXleft = digitalRead(X_EDGE_LEFT);
-  if (lastStateXright == HIGH && edgeXright == LOW)
+  if (lastStateXright == LOW && edgeXright == HIGH)
   {
     Serial.write('1');
   }
-  if (lastStateXleft == HIGH && edgeXleft == LOW)
+  if (lastStateXleft == LOW && edgeXleft == HIGH)
   {
     Serial.write('2');
   }
@@ -119,17 +121,19 @@ void loop()
     Serial.readBytes(podatki, bytes);
     int8_t smerX = (int8_t)podatki[0];
     int8_t smerY = (int8_t)podatki[1];
-    stepsX = podatki[2];
-    stepsY = podatki[3];
+    stepsX = podatki[2] * 7;
+    stepsY = (podatki[3]*5)/2;
     speed1 = podatki[4];
     speed2 = podatki[5];
     strel = (podatki[6] == 1);
+    multX = (podatki[7]);
+    multY = podatki[8];
 
     setMicrosteppingX(true);
-    stepsX *= 8;
+    stepsX *= multX;
 
     setMicrosteppingY(true);
-    stepsY *= 8;
+    stepsY *= multY;
 
     stepperX.move(stepsX * smerX);
     stepperY.move(stepsY * smerY);
