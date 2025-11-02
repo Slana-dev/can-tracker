@@ -104,6 +104,21 @@ def smerPremika(boxes, minInde, smer, odmikY):
         return -1
     return 1
 
+# Odmik po y glede na oddaljenost za natancnost
+def odmikOddaljenost(boxes, minInde):
+    heightBox = boxes[minInde][3]
+    razmerje = heightBox / visina
+    
+    if razmerje > 0.3:
+        return 0
+    elif razmerje <= 0.3 and razmerje > 0.2:
+        return heightBox / 4
+    elif razmerje <= 0.2 and razmerje > 0.1:
+        return heightBox/ 2
+    else: 
+        return heightBox
+
+
 # Poslje komando
 def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz, multX, multY):
     buffer= struct.pack(
@@ -126,7 +141,7 @@ def recenter():
     data = arduino.read(arduino.in_waiting)
     if data == '1':
         sendCommand(0,-1,0,60,standby,standby,0,8,8)
-    else:
+    elif data == '2':
         sendCommand(-1,0,60,0,standby,standby,0,8,8)
 
     arduino.reset_input_buffer()
@@ -161,6 +176,7 @@ def izvedi(minInde, n):
 
         if(keyboard.is_pressed('space')):
             sendCommand(0,0,0,0,0,0,0,1,1)
+            continue
         
         if(keyboard.is_pressed('e')):
             arduino.reset_input_buffer()
@@ -203,13 +219,14 @@ def izvedi(minInde, n):
             return
         
         # Move the robot
+        odmikY = odmikOddaljenost(boxes, minInde)
         multiplyX = 16
         multiplyY = 16
         smerX = smerPremika(boxes, minInde, 'x', 0)
-        smerY = smerPremika(boxes, minInde, 'y', 0)
+        smerY = smerPremika(boxes, minInde, 'y', odmikY)
         
         kotX = kotKalkulator(boxes, minInde, 'x', 0)
-        kotY = kotKalkulator(boxes, minInde, 'y', 0)
+        kotY = kotKalkulator(boxes, minInde, 'y', odmikY)
 
         stepX = (round)(kotX / (1.8))
         stepY = (round)(kotY / (1.8))
@@ -246,6 +263,7 @@ def mainLoop():
 
         if(keyboard.is_pressed('space')):
             sendCommand(0,0,0,0,0,0,0,1,1)
+            continue
 
         if arduino.in_waiting > 0:
             recenter()
@@ -316,6 +334,7 @@ def Manual():
      
         if keyboard.is_pressed('space'):
             sendCommand(0,0,0,0, 0,0,0,1,1) 
+
 
         if cv2.waitKey(1) == ord('q'):
             break
