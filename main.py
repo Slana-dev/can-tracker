@@ -104,19 +104,18 @@ def smerPremika(boxes, minInde, smer, odmikY):
         return -1
     return 1
 
+
+    
+    
 # Odmik po y glede na oddaljenost za natancnost
 def odmikOddaljenost(boxes, minInde):
     heightBox = boxes[minInde][3]
-    razmerje = heightBox / visina
-    
-    if razmerje > 0.3:
+    distance = (focalY * 0.145)/heightBox
+    if distance < 2:
         return 0
-    elif razmerje <= 0.3 and razmerje > 0.2:
-        return heightBox / 4
-    elif razmerje <= 0.2 and razmerje > 0.1:
-        return heightBox/ 2
-    else: 
-        return heightBox
+    kpoznan = 2
+    dpoznan = 4
+    koef = kpoznan * math.pow(distance/dpoznan,1.2)
 
 
 # Poslje komando
@@ -139,9 +138,9 @@ def sendCommand(smerX, smerY, stepX, stepY, speed1, speed2, polz, multX, multY):
 # Recenter 
 def recenter():
     data = arduino.read(arduino.in_waiting)
-    if data == '1':
+    if data == b'1':
         sendCommand(0,-1,0,60,standby,standby,0,8,8)
-    elif data == '2':
+    elif data == b'2':
         sendCommand(-1,0,60,0,standby,standby,0,8,8)
 
     arduino.reset_input_buffer()
